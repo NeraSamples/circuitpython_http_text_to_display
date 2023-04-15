@@ -14,4 +14,4 @@ External displays will require setting the display.
 Universal Socket required for airlift compatibility, from the repository: https://github.com/Neradoc/Circuitpython_Universal_Sockets
 
 ![Web page](docs/web_page1.png)
-![Pyportal](docs/pyportal.jpg)
+![Pyportal](docs/pyportal1.jpg)
