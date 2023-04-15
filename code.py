@@ -107,12 +107,12 @@ def base(request):
     try:
         # receive a text in the body
         body = json.loads(request.body)
-        print(body)
         ########################################################
         # extract the size field
         size = body.get("size", None)
         # change the scale
         if size:
+            print(f"{size=}")
             try:
                 text_area.scale = size
             except ValueError:
@@ -133,7 +133,7 @@ def base(request):
         message = "\n".join(wrap_the_text(the_text))
         # show the message
         text_area.text = message
-        print(f"Received:", message)
+        print("Received:", repr(message))
         ########################################################
         # refresh the display after all the changes
         display.refresh()
