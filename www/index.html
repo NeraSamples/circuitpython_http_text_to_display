@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<!-- 
+SPDX-FileCopyrightText: Copyright 2023 Neradoc, https://neradoc.me
+SPDX-License-Identifier: MIT
+ -->
+<head>
+	<meta charset="utf-8"/>
+	<link rel="icon" href="data:;base64,=">
+	<title>Button</title>
+	<link rel="stylesheet" type="text/css" href="coloris.min.css">
+	<script type="text/javascript" src="coloris.min.js"></script>
+	<style>
+	@keyframes pulse {
+		0%   {opacity: 1;}
+		50%  {opacity: 0;}
+		100% {opacity: 1;}
+	}
+	@keyframes spin {
+		0%   {transform: rotate(0);}
+		25%  {transform: rotate(90deg);}
+		50%  {transform: rotate(180deg);}
+		75%  {transform: rotate(270deg);}
+		100% {transform: rotate(360deg);}
+	}
+	#form {
+		width: 320px;
+		padding: 8px;
+		background: #B0E0FF;
+		border-radius: 16px;
+		margin: auto;
+	}
+	#field_text {
+		font-size: inherit;
+		padding: 2px 4px;
+	}
+	.icons {
+		display: none;
+	}
+	#text_sending {
+		animation-name: spin;
+		animation-duration: 1.5s;
+		animation-iteration-count: infinite;
+	}
+	#color_parent {
+		position: relative;
+		margin-top: 8px;
+	}
+	</style>
+	<script>
+	var current_color = "FFFFFF"
+	async function send_fields() {
+		// icons for the user interface
+		const icons = document.getElementsByClassName("icons")
+		const sending = document.getElementById("text_sending")
+		const sent = document.getElementById("text_sent")
+		const error = document.getElementById("text_error")
+		// go
+		var ok = false
+		// hide the icons
+		for(icon of icons) { icon.style.display="none" }
+		// show "sending" icon
+		sending.style.display = "inline-block"
+		/**********************************************************/
+		// fields in the form
+		const field_text = document.getElementById("field_text")
+		const field_size = document.getElementById("field_size")
+		// this is the payload sent to the board.
+		const payload = {
+			"text": field_text.value,
+			"size": Number(field_size.value),
+			"color": current_color,
+		}
+		console.log(payload)
+		/**********************************************************/
+		// now send !
+		try {
+			const res = await fetch(`/receive`, {
+				method: "POST",
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify(payload),
+			})
+			console.log(res)
+			ok = res.ok
+		} catch(err) {
+			console.log(err)
+		}
+		// hide "sending" icon
+		sending.style.display = "none"
+		// show status icon based on the result (success or error)
+		if(ok) {
+			sent.style.display = "inline"
+		} else {
+			error.style.display = "inline"
+		}
+	}
+	function change_text(event) {
+		// pressing enter
+		if(event.keyCode == 13) {
+			send_fields()
+		}
+	}
+	function change_num(event) {
+		// check sizes
+		const field_size = document.getElementById("field_size")
+		if(Number(field_size.value) <= 0) { field_size.value = "1" }
+		// call the other one
+		send_fields()
+	}
+	</script>
+	<script>
+	const CHOICE_DELAY = 10
+	var sender = 0
+	function changed_color(event) {
+		console.log(event)
+		current_color = event.detail.color.replace("#","")
+		// this delays sending the color by the delay (1s by default) 
+		// avoids spamming the server
+		if(sender) {
+			clearTimeout(sender)
+			sender = 0
+		}
+		sender = setTimeout(() => {
+			console.log("sender")
+			send_fields(event)
+			sender = 0
+		}, CHOICE_DELAY)
+	}
+	</script>
+</head>
+<body>
+	<div id="form">
+		<div>
+		<label>Press enter to send:<br/>
+			<input id="field_text" type="text" onkeyup="change_text(event)"/>
+			<span class="icons" id="text_sending">⏱</span>
+			<span class="icons" id="text_sent">☑️</span>
+			<span class="icons" id="text_error">❌️</span>
+		</label>
+		</div>
+		<div>
+		<label>Font scale:<br/>
+			<input id="field_size" type="number" onchange="change_num(event)" value="1"/>
+		</label>
+		</div>
+		<div>
+		<label>Text Color:<br/>
+			<div id="color_parent"></div>
+		</label>
+		</div>
+	</div>
+	<script>
+		// Coloris
+		Coloris({
+			// el: '#text_color',
+			inline: true,
+			parent: "#color_parent",
+			theme: 'polaroid',
+			themeMode: 'dark',
+			format: 'hex',
+			formatToggle: false,
+			// clearButton: true,
+			// closeButton: true,
+			alpha: false,
+			inline: true,
+			swatches: ['#067bc2', '#84bcda', '#80e377', '#ecc30b', '#f37748', '#d56062']
+		})
+		// Setup the callback
+		var color_field = document.getElementById("text_color")
+		document.addEventListener("coloris:pick", changed_color)
+	</script>
+</body>
+</html>
