@@ -57,9 +57,8 @@ SPDX-License-Identifier: MIT
 		const error = document.getElementById("text_error")
 		// go
 		var ok = false
-		// hide the icons
-		for(icon of icons) { icon.style.display="none" }
 		// show "sending" icon
+		for(icon of icons) { icon.style.display="none" }
 		sending.style.display = "inline-block"
 		/**********************************************************/
 		// fields in the form
@@ -96,37 +95,99 @@ SPDX-License-Identifier: MIT
 			error.style.display = "inline"
 		}
 	}
-	function change_text(event) {
-		// pressing enter
-		if(event.keyCode == 13) {
-			send_fields()
-		}
-	}
-	function change_num(event) {
-		// check sizes
-		const field_size = document.getElementById("field_size")
-		if(Number(field_size.value) <= 0) { field_size.value = "1" }
-		// call the other one
-		send_fields()
-	}
-	</script>
-	<script>
-	const CHOICE_DELAY = 10
+	////////////////////////////////////////////////////////////////
+	// Start the update process with a delay
+	////////////////////////////////////////////////////////////////
+	const CHOICE_DELAY = 500
 	var sender = 0
-	function changed_color(event) {
-		console.log(event)
-		current_color = event.detail.color.replace("#","")
-		// this delays sending the color by the delay (1s by default) 
-		// avoids spamming the server
+	function update_values(event) {
+		// show "sending" icon
+		const icons = document.getElementsByClassName("icons")
+		const sending = document.getElementById("text_sending")
+		for(icon of icons) { icon.style.display="none" }
+		sending.style.display = "inline-block"
+		// this delays sending the values by the delay (1s by default) 
+		// avoids spamming the server and sending old values
 		if(sender) {
 			clearTimeout(sender)
 			sender = 0
 		}
 		sender = setTimeout(() => {
 			console.log("sender")
-			send_fields(event)
-			sender = 0
+			send_fields(event).then(() => {
+				sender = 0
+			})
 		}, CHOICE_DELAY)
+	}
+	////////////////////////////////////////////////////////////////
+	// Update a field and retrieve the data into a variable
+	////////////////////////////////////////////////////////////////
+	function change_text(event) {
+		// pressing enter
+		if(event.keyCode == 13) {
+			update_values()
+		}
+	}
+	function change_num(event) {
+		// check sizes
+		const field_size = document.getElementById("field_size")
+		if(Number(field_size.value) <= 0) { field_size.value = "1" }
+		update_values()
+	}
+	////////////////////////////////////////////////////////////////
+	// Coloris
+	////////////////////////////////////////////////////////////////
+	function init_coloris() {
+		function changed_color(event) {
+			current_color = event.detail.color.replace("#","")
+			update_values()
+		}
+		// Coloris
+		Coloris({
+			// el: '#text_color',
+			inline: true,
+			parent: "#color_parent",
+			theme: 'polaroid',
+			themeMode: 'dark',
+			format: 'hex',
+			formatToggle: false,
+			// clearButton: true,
+			// closeButton: true,
+			alpha: false,
+			inline: true,
+			defaultColor: `${current_color}`,
+			swatches: ['#067bc2', '#84bcda', '#80e377', '#ecc30b', '#f37748', '#d56062']
+		})
+		// Setup the callback
+		var color_field = document.getElementById("text_color")
+		document.addEventListener("coloris:pick", changed_color)
+	}
+	////////////////////////////////////////////////////////////////
+	// Get current values
+	////////////////////////////////////////////////////////////////
+	async function init_values() {
+		const field_text = document.getElementById("field_text")
+		const field_size = document.getElementById("field_size")
+		try {
+			const res = await fetch("/status")
+			const values = await res.json()
+			const text = values.text
+			const size = values.size
+			const color = values.color
+			// brightness = values.brightness
+			console.log("Current Values", values)
+			current_color = color
+			field_text.value = text
+			field_size.value = size
+		} catch(e) {
+			console.log("Default color error")
+			console.log(e)
+			current_color = "00FF00"
+		}
+	}
+	async function init_page() {
+		await init_values()
+		init_coloris()
 	}
 	</script>
 </head>
@@ -145,31 +206,11 @@ SPDX-License-Identifier: MIT
 			<input id="field_size" type="number" onchange="change_num(event)" value="1"/>
 		</label>
 		</div>
-		<div>
-		<label>Text Color:<br/>
-			<div id="color_parent"></div>
-		</label>
-		</div>
+		<p>Text Color:</p>
+		<div id="color_parent"></div>
 	</div>
 	<script>
-		// Coloris
-		Coloris({
-			// el: '#text_color',
-			inline: true,
-			parent: "#color_parent",
-			theme: 'polaroid',
-			themeMode: 'dark',
-			format: 'hex',
-			formatToggle: false,
-			// clearButton: true,
-			// closeButton: true,
-			alpha: false,
-			inline: true,
-			swatches: ['#067bc2', '#84bcda', '#80e377', '#ecc30b', '#f37748', '#d56062']
-		})
-		// Setup the callback
-		var color_field = document.getElementById("text_color")
-		document.addEventListener("coloris:pick", changed_color)
+	init_page()
 	</script>
 </body>
 </html>

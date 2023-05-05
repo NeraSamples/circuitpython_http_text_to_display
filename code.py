@@ -55,7 +55,7 @@ splash = displayio.Group()
 text_area = Label(
     FONT,
     scale=SCALE,
-    text="Ready to\nreceive.",
+    text="Ready to receive.",
     color=0xFFFF00,
     anchored_position=(display.width // 2, 2),
     anchor_point=(0.5, 0),
@@ -73,40 +73,70 @@ def wrap_the_text(text):
 # wifi
 ############################################################################
 
-from universal_socket import UniversalSocket
-from adafruit_esp32spi import adafruit_esp32spi
-import adafruit_esp32spi.adafruit_esp32spi_socket as socket
+try:
+    import wifi
+    import socketpool
 
-esp32_cs = DigitalInOut(board.ESP_CS)
-esp32_ready = DigitalInOut(board.ESP_BUSY)
-esp32_reset = DigitalInOut(board.ESP_RESET)
+    if not wifi.radio.connected:
+        wifi.radio.connect(
+            os.getenv("WIFI_SSID"),
+            os.getenv("WIFI_PASSWORD")
+        )
+    pool = socketpool.SocketPool(wifi.radio)
+    server = HTTPServer(pool, root_path=ROOT)
+    IP_ADDRESS = f"{wifi.radio.ipv4_address}"
 
-spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-esp = adafruit_esp32spi.ESP_SPIcontrol(
-    spi, esp32_cs, esp32_ready, esp32_reset
-)
+except ImportError:
+    from universal_socket import UniversalSocket
+    from adafruit_esp32spi import adafruit_esp32spi
+    import adafruit_esp32spi.adafruit_esp32spi_socket as socket
 
-esp.connect_AP(
-    os.getenv("CIRCUITPY_WIFI_SSID"),
-    os.getenv("CIRCUITPY_WIFI_PASSWORD"),
-)
+    esp32_cs = DigitalInOut(board.ESP_CS)
+    esp32_ready = DigitalInOut(board.ESP_BUSY)
+    esp32_reset = DigitalInOut(board.ESP_RESET)
 
-socket.set_interface(esp)
-usock = UniversalSocket(socket, iface=esp)
-server = HTTPServer(usock)
-IP_ADDRESS = "%d.%d.%d.%d" % tuple(esp.ip_address)
+    spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
+    esp = adafruit_esp32spi.ESP_SPIcontrol(
+        spi, esp32_cs, esp32_ready, esp32_reset
+    )
+
+    esp.connect_AP(
+        os.getenv("WIFI_SSID"),
+        os.getenv("WIFI_PASSWORD"),
+    )
+
+    socket.set_interface(esp)
+    usock = UniversalSocket(socket, iface=esp)
+    server = HTTPServer(usock, root_path=ROOT)
+    IP_ADDRESS = "%d.%d.%d.%d" % tuple(esp.ip_address)
 
 ############################################################################
 # server routes and app logic
 ############################################################################
 
+# Application status data
+class CurrentData:
+    def __init__(self):
+        self.text = "Ready to receive."
+        self.size = 1
+        self.color = 0xFFFF00
+    def __repr__(self):
+        return json.dumps({
+            "text": self.text,
+            "size": self.size,
+            "color": f"#{self.color:06X}",
+        })
+
+current_data = CurrentData()
+
 ERROR400 = CommonHTTPStatus.BAD_REQUEST_400
 
 @server.route("/receive", method="POST")
-def base(request):
+def receive(request):
     try:
         # receive a text in the body
         body = json.loads(request.body)
+
         ########################################################
         # extract the size field
         size = body.get("size", None)
@@ -115,43 +145,62 @@ def base(request):
             print(f"{size=}")
             try:
                 text_area.scale = size
+                current_data.size = size
             except ValueError:
                 print("Size invalid")
+
         ########################################################
         # extract the color field
-        color = body.get("color", None)
+        color = body.get("color", None).strip("#")
         if color:
             print(f"{color=}")
             try:
                 text_area.color = int(color, 16)
+                current_data.color = int(color, 16)
             except ValueError:
                 print("Color invalid")
+
         ########################################################
         # extract the text field
         the_text = body.get("text", "")
+        current_data.text = the_text
         # prepare the message for the screen
         message = "\n".join(wrap_the_text(the_text))
         # show the message
         text_area.text = message
         print("Received:", repr(message))
+
         ########################################################
         # refresh the display after all the changes
         display.refresh()
         # respond ok
         with HTTPResponse(request) as response:
             response.send("ok")
+
     except (ValueError, AttributeError) as err:
         # show the error if something went wrong
         traceback.print_exception(err)
         with HTTPResponse(request, status=ERROR400) as response:
             response.send("error")
 
+@server.route("/status", method="GET")
+def get_status(request):
+    try:
+        with HTTPResponse(request, content_type=MIMEType.TYPE_JSON) as response:
+            out_data = repr(current_data)
+            response.send(out_data)
+
+    except (ValueError, AttributeError) as err:
+        # show the error if something went wrong
+        traceback.print_exception(err)
+        with HTTPResponse(request, status=ERROR400) as response:
+            response.send("error")
 
 ############################################################################
 # start and loop
 ############################################################################
 
-server.start(host=str(IP_ADDRESS), port=PORT, root_path=ROOT)
+server.start(host=str(IP_ADDRESS), port=PORT)
 print(f"Listening on http://{IP_ADDRESS}:{PORT}")
 
 while True:
