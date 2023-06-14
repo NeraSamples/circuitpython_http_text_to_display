@@ -11,10 +11,7 @@ import os
 import busio
 from digitalio import *
 
-from adafruit_httpserver.server import HTTPServer
-from adafruit_httpserver.response import HTTPResponse
-from adafruit_httpserver.mime_type import MIMEType
-from adafruit_httpserver.status import CommonHTTPStatus
+from adafruit_httpserver import Server, Response
 
 PORT = 8000
 ROOT = "/www"
@@ -83,7 +80,7 @@ try:
             os.getenv("WIFI_PASSWORD")
         )
     pool = socketpool.SocketPool(wifi.radio)
-    server = HTTPServer(pool, root_path=ROOT)
+    server = Server(pool, root_path=ROOT, debug=True)
     IP_ADDRESS = f"{wifi.radio.ipv4_address}"
 
 except ImportError:
@@ -107,7 +104,7 @@ except ImportError:
 
     socket.set_interface(esp)
     usock = UniversalSocket(socket, iface=esp)
-    server = HTTPServer(usock, root_path=ROOT)
+    server = Server(usock, root_path=ROOT, debug=True)
     IP_ADDRESS = "%d.%d.%d.%d" % tuple(esp.ip_address)
 
 ############################################################################
@@ -129,72 +126,54 @@ class CurrentData:
 
 current_data = CurrentData()
 
-ERROR400 = CommonHTTPStatus.BAD_REQUEST_400
-
-@server.route("/receive", method="POST")
+@server.route("/receive", methods="POST")
 def receive(request):
-    try:
-        # receive a text in the body
-        body = json.loads(request.body)
+    # receive a text in the body
+    body = json.loads(request.body)
 
-        ########################################################
-        # extract the size field
-        size = body.get("size", None)
-        # change the scale
-        if size:
-            print(f"{size=}")
-            try:
-                text_area.scale = size
-                current_data.size = size
-            except ValueError:
-                print("Size invalid")
+    ########################################################
+    # extract the size field
+    size = body.get("size", None)
+    # change the scale
+    if size:
+        print(f"{size=}")
+        try:
+            text_area.scale = size
+            current_data.size = size
+        except ValueError:
+            print("Size invalid")
 
-        ########################################################
-        # extract the color field
-        color = body.get("color", None).strip("#")
-        if color:
-            print(f"{color=}")
-            try:
-                text_area.color = int(color, 16)
-                current_data.color = int(color, 16)
-            except ValueError:
-                print("Color invalid")
+    ########################################################
+    # extract the color field
+    color = body.get("color", None).strip("#")
+    if color:
+        print(f"{color=}")
+        try:
+            text_area.color = int(color, 16)
+            current_data.color = int(color, 16)
+        except ValueError:
+            print("Color invalid")
 
-        ########################################################
-        # extract the text field
-        the_text = body.get("text", "")
-        current_data.text = the_text
-        # prepare the message for the screen
-        message = "\n".join(wrap_the_text(the_text))
-        # show the message
-        text_area.text = message
-        print("Received:", repr(message))
+    ########################################################
+    # extract the text field
+    the_text = body.get("text", "")
+    current_data.text = the_text
+    # prepare the message for the screen
+    message = "\n".join(wrap_the_text(the_text))
+    # show the message
+    text_area.text = message
+    print("Received:", repr(message))
 
-        ########################################################
-        # refresh the display after all the changes
-        display.refresh()
-        # respond ok
-        with HTTPResponse(request) as response:
-            response.send("ok")
+    ########################################################
+    # refresh the display after all the changes
+    display.refresh()
+    # respond ok
+    return Response(request, "ok")
 
-    except (ValueError, AttributeError) as err:
-        # show the error if something went wrong
-        traceback.print_exception(err)
-        with HTTPResponse(request, status=ERROR400) as response:
-            response.send("error")
-
-@server.route("/status", method="GET")
+@server.route("/status", methods="GET")
 def get_status(request):
-    try:
-        with HTTPResponse(request, content_type=MIMEType.TYPE_JSON) as response:
-            out_data = repr(current_data)
-            response.send(out_data)
-
-    except (ValueError, AttributeError) as err:
-        # show the error if something went wrong
-        traceback.print_exception(err)
-        with HTTPResponse(request, status=ERROR400) as response:
-            response.send("error")
+    out_data = repr(current_data)
+    return Response(request, out_data, content_type="application/json")
 
 ############################################################################
 # start and loop
