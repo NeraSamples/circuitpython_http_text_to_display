@@ -59,7 +59,7 @@ text_area = Label(
 )
 
 splash.append(text_area)
-display.show(splash)
+display.root_group = splash
 display.refresh()
 
 def wrap_the_text(text):
